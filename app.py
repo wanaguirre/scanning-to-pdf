@@ -140,8 +140,9 @@ def api_preview():
     path    = INPUT_DIR / data["name"]
     corners = data["corners"]
     paper   = data.get("paper", "a4")
+    mode    = data.get("mode", "bw")
 
-    page = process_page(path, corners, dpi=300, paper=paper)
+    page = process_page(path, corners, dpi=300, paper=paper, mode=mode)
 
     return jsonify({"preview": _pil_to_jpeg_b64(page, quality=92)})
 
@@ -183,12 +184,13 @@ def api_generate():
     pages_in = data.get("pages", [])
     filename = data.get("filename", "scan.pdf")
     paper    = data.get("paper", "a4")
+    mode     = data.get("mode", "bw")
 
     processed = []
     errors    = []
     for item in pages_in:
         try:
-            page = process_page(INPUT_DIR / item["name"], item["corners"], dpi=300, paper=paper)
+            page = process_page(INPUT_DIR / item["name"], item["corners"], dpi=300, paper=paper, mode=mode)
             processed.append(page)
         except Exception as e:
             errors.append(f"{item['name']}: {e}")

@@ -143,13 +143,14 @@ def perspective_warp(img: np.ndarray, corners: np.ndarray) -> np.ndarray:
 
 
 def resize_to_paper(img: np.ndarray, dpi: int, paper: str = "a4") -> np.ndarray:
-    """Fit *img* (grayscale) onto the chosen paper canvas at *dpi*.
+    """Fit *img* (grayscale OR color BGR) onto the chosen paper canvas at *dpi*.
     paper can be 'a4', 'letter', 'a3', or 'free' (keep warp dimensions).
     """
     mm = PAPER_SIZES.get(paper.lower())
     if mm is None:          # 'free' – return the image unchanged
         return img
     h, w = img.shape[:2]
+    color = img.ndim == 3
     # Auto-rotate canvas to match image orientation
     px_w = int(mm[0] / 25.4 * dpi)
     px_h = int(mm[1] / 25.4 * dpi)
@@ -158,7 +159,7 @@ def resize_to_paper(img: np.ndarray, dpi: int, paper: str = "a4") -> np.ndarray:
     scale = min(px_w / w, px_h / h)
     new_w, new_h = int(w * scale), int(h * scale)
     resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    canvas  = np.full((px_h, px_w), 255, dtype=np.uint8)
+    canvas  = np.full((px_h, px_w, 3), 255, dtype=np.uint8) if color else np.full((px_h, px_w), 255, dtype=np.uint8)
     y_off   = (px_h - new_h) // 2
     x_off   = (px_w - new_w) // 2
     canvas[y_off:y_off + new_h, x_off:x_off + new_w] = resized
@@ -166,6 +167,7 @@ def resize_to_paper(img: np.ndarray, dpi: int, paper: str = "a4") -> np.ndarray:
 
 
 def enhance_scan(gray: np.ndarray) -> np.ndarray:
+    """Black-and-white adaptive threshold (best for text/documents)."""
     binary = cv2.adaptiveThreshold(
         gray, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -176,25 +178,50 @@ def enhance_scan(gray: np.ndarray) -> np.ndarray:
     return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
 
+def enhance_color(bgr: np.ndarray) -> np.ndarray:
+    """Sharpen + mild CLAHE contrast boost for color scans."""
+    # Unsharp mask
+    blurred   = cv2.GaussianBlur(bgr, (0, 0), 3)
+    sharpened = cv2.addWeighted(bgr, 1.4, blurred, -0.4, 0)
+    # CLAHE on the L channel only (preserves color fidelity)
+    lab = cv2.cvtColor(sharpened, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
+    lab = cv2.merge([clahe.apply(l), a, b])
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
 def process_page(
     path: Path,
     corners: list[list[float]],
     dpi: int = 300,
     paper: str = "a4",
+    mode: str = "bw",
 ) -> Image.Image:
     """
     Given an image path and 4 corners (in original pixel coords, TL/TR/BR/BL),
     return a processed PIL Image ready for PDF assembly.
+
     paper: 'a4' | 'letter' | 'a3' | 'free'
+    mode:  'bw'    – black & white adaptive threshold (best for text)
+           'gray'  – natural grayscale, no thresholding
+           'color' – full colour with sharpening + contrast boost
     """
     bgr, gray, _ = load_image(path)
     corners_arr  = np.array(corners, dtype=np.float32)
 
-    bgr  = perspective_warp(bgr,  corners_arr)
-    gray = perspective_warp(gray, corners_arr)
-    gray = resize_to_paper(gray, dpi, paper)
-    gray = enhance_scan(gray)
-    return Image.fromarray(gray)
+    if mode == "color":
+        img = perspective_warp(bgr, corners_arr)
+        img = resize_to_paper(img, dpi, paper)
+        img = enhance_color(img)
+        return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    else:
+        img = perspective_warp(gray, corners_arr)
+        img = resize_to_paper(img, dpi, paper)
+        if mode == "bw":
+            img = enhance_scan(img)
+        # mode == 'gray': natural grayscale, no thresholding
+        return Image.fromarray(img)
 
 
 def build_pdf(pages: list[Image.Image], output_path: Path) -> None:

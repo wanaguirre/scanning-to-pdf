@@ -167,15 +167,15 @@ header h1 span{color:var(--accent)}
 }
 #canvas{cursor:crosshair;box-shadow:0 8px 48px rgba(0,0,0,.7);border-radius:3px;display:block;image-rendering:auto}
 
-/* Paper format select */
-#paper-format{
+/* Paper format + scan mode selects */
+#paper-format,#scan-mode{
   background:var(--surface2);color:var(--text);border:1px solid var(--border);
   border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;
   appearance:none;-webkit-appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7494'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;
 }
-#paper-format:hover{border-color:var(--accent)}
+#paper-format:hover,#scan-mode:hover{border-color:var(--accent)}
 
 /* Toolbar */
 #toolbar{
@@ -293,6 +293,11 @@ header h1 span{color:var(--accent)}
             <option value="a3">A3</option>
             <option value="free">Free (no resize)</option>
           </select>
+          <select id="scan-mode" title="Colour mode">
+            <option value="bw">B&amp;W</option>
+            <option value="gray">Grayscale</option>
+            <option value="color">Colour</option>
+          </select>
         </div>
       </div>
     </div>
@@ -323,6 +328,19 @@ let dragging    = -1
 const _today = new Date()
 const _ds    = `${_today.getFullYear()}-${String(_today.getMonth()+1).padStart(2,'0')}-${String(_today.getDate()).padStart(2,'0')}_${String(_today.getHours()).padStart(2,'0')}-${String(_today.getMinutes()).padStart(2,'0')}`
 let outputName  = `scan_${_ds}.pdf`
+let _nameEditedManually = false
+
+function buildOutputName() {
+  if (_nameEditedManually) return outputName
+  const paper = document.getElementById('paper-format')?.value || 'a4'
+  const mode  = document.getElementById('scan-mode')?.value  || 'bw'
+  return `scan_${_ds}_${paper}_${mode}.pdf`
+}
+function syncOutputName() {
+  if (_nameEditedManually) return
+  outputName = buildOutputName()
+  document.getElementById('btn-filename').textContent = '📄 ' + outputName
+}
 
 // Persists manually adjusted corners keyed by filename.
 // Survives page navigation and refreshes; cleared only on image delete or Reset.
@@ -694,7 +712,8 @@ document.getElementById('btn-preview').onclick = async () => {
       body: JSON.stringify({
         name: images[currentIdx].name,
         corners: images[currentIdx].corners,
-        paper: document.getElementById('paper-format').value
+        paper: document.getElementById('paper-format').value,
+        mode:  document.getElementById('scan-mode').value
       })
     })
     const data = await res.json()
@@ -712,6 +731,7 @@ document.getElementById('btn-generate').onclick = async () => {
       body: JSON.stringify({
         filename: outputName,
         paper: document.getElementById('paper-format').value,
+        mode:  document.getElementById('scan-mode').value,
         pages: images.map(i => ({ name: i.name, corners: i.corners }))
       })
     })
@@ -736,6 +756,7 @@ document.getElementById('btn-filename').onclick = () => {
   const n = prompt('PDF filename:', outputName)
   if (n && n.trim()) {
     outputName = n.trim().endsWith('.pdf') ? n.trim() : n.trim() + '.pdf'
+    _nameEditedManually = true
     document.getElementById('btn-filename').textContent = '📄 ' + outputName
   }
 }
@@ -772,7 +793,9 @@ function showToast(msg) {
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-document.getElementById('btn-filename').textContent = '📄 ' + outputName
+document.getElementById('paper-format').addEventListener('change', syncOutputName)
+document.getElementById('scan-mode').addEventListener('change', syncOutputName)
+syncOutputName()
 init()
 </script>
 </body>
