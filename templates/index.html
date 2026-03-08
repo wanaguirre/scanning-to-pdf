@@ -322,6 +322,23 @@ let currentIdx  = 0
 let dragging    = -1
 let outputName  = 'scan.pdf'
 
+// Persists manually adjusted corners keyed by filename.
+// Survives page navigation and refreshes; cleared only on image delete or Reset.
+const savedCorners = new Map()
+
+function persistCorners() {
+  if (!images.length) return
+  const img = images[currentIdx]
+  savedCorners.set(img.name, img.corners.map(c => [...c]))
+}
+
+// Apply savedCorners (if any) onto each image object returned by the server.
+function applyPersistedCorners(imgList) {
+  imgList.forEach(img => {
+    if (savedCorners.has(img.name)) img.corners = savedCorners.get(img.name).map(c => [...c])
+  })
+}
+
 const CORNER_COLORS = ['#ff4d4d','#4dff88','#4d9fff','#ffd700']
 const CORNER_LABELS = ['TL','TR','BR','BL']
 const HANDLE_R      = 12
@@ -377,6 +394,7 @@ async function loadInputImages() {
       btn.addEventListener('click', async e => {
         e.stopPropagation()
         const name = btn.dataset.name
+        savedCorners.delete(name)
         await fetch(`/api/image/${encodeURIComponent(name)}`, { method: 'DELETE' })
         await loadInputImages()
       })
@@ -388,6 +406,7 @@ async function loadInputImages() {
 document.getElementById('btn-clear-all').onclick = async () => {
   if (!confirm('Remove all images from the input folder?')) return
   showLoading('Removing…')
+  savedCorners.clear()
   const res  = await fetch('/api/images')
   const data = await res.json()
   const imgs = (data.images || []).filter(i => !i.error)
@@ -452,8 +471,8 @@ async function enterEditor() {
     const res  = await fetch('/api/images')
     const data = await res.json()
     images      = (data.images || []).filter(i => !i.error)
-    origCorners = images.map(i => i.corners.map(c => [...c]))
-    if (images.length === 0) { hideLoading(); setStatus('No images found', 'warn'); return }
+    origCorners = images.map(i => i.corners.map(c => [...c]))  // auto-detected — used by Reset
+    applyPersistedCorners(images)                               // overlay any manual adjustments
     buildSidebar()
     showEditor()
     // Wait one animation frame so the editor is in the DOM and has real dimensions
@@ -492,6 +511,7 @@ async function deleteImage(e, name) {
   e.stopPropagation()
   if (!confirm(`Remove "${name}"?`)) return
   showLoading('Removing…')
+  savedCorners.delete(name)
   await fetch(`/api/image/${encodeURIComponent(name)}`, { method: 'DELETE' })
   await refreshImages(Math.max(0, currentIdx - 1))
   hideLoading()
@@ -502,8 +522,8 @@ async function refreshImages(selectIdx) {
   const res   = await fetch('/api/images')
   const data  = await res.json()
   images      = (data.images || []).filter(i => !i.error)
-  origCorners = images.map(i => i.corners.map(c => [...c]))
-  buildSidebar()
+  origCorners = images.map(i => i.corners.map(c => [...c]))  // auto-detected — used by Reset
+  applyPersistedCorners(images)                               // overlay any manual adjustments
   if (images.length === 0) {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     document.getElementById('btn-generate').disabled = true
@@ -637,7 +657,7 @@ canvas.onmousemove = e => {
   if (dragging >= 0) { images[currentIdx].corners[dragging] = toOrig(cx, cy); draw(); return }
   canvas.style.cursor = nearestCorner(cx, cy) >= 0 ? 'grab' : 'crosshair'
 }
-canvas.onmouseup = canvas.onmouseleave = () => { dragging = -1; canvas.style.cursor = 'crosshair' }
+canvas.onmouseup = canvas.onmouseleave = () => { if (dragging >= 0) persistCorners(); dragging = -1; canvas.style.cursor = 'crosshair' }
 
 canvas.addEventListener('touchstart', e => {
   e.preventDefault()
@@ -651,12 +671,14 @@ canvas.addEventListener('touchmove', e => {
   images[currentIdx].corners[dragging] = toOrig(cx, cy)
   draw()
 }, { passive: false })
-canvas.addEventListener('touchend', () => dragging = -1)
+canvas.addEventListener('touchend', () => { if (dragging >= 0) persistCorners(); dragging = -1 })
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 document.getElementById('btn-prev').onclick    = () => { if (currentIdx > 0) loadCanvasImage(currentIdx - 1) }
 document.getElementById('btn-next').onclick    = () => { if (currentIdx < images.length - 1) loadCanvasImage(currentIdx + 1) }
 document.getElementById('btn-reset').onclick   = () => {
+  const name = images[currentIdx].name
+  savedCorners.delete(name)
   images[currentIdx].corners = origCorners[currentIdx].map(c => [...c])
   draw()
   setStatus('Corners reset', 'ok')
