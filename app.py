@@ -141,14 +141,9 @@ def api_preview():
     corners = data["corners"]
     paper   = data.get("paper", "a4")
 
-    page = process_page(path, corners, dpi=220, paper=paper)   # higher DPI for better preview quality
-    # Scale down further for the preview panel
-    w, h  = page.size
-    scale = min(1.0, 700 / max(w, h))
-    if scale < 1.0:
-        page = page.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+    page = process_page(path, corners, dpi=300, paper=paper)
 
-    return jsonify({"preview": _pil_to_jpeg_b64(page)})
+    return jsonify({"preview": _pil_to_jpeg_b64(page, quality=92)})
 
 
 @app.route("/api/upload", methods=["POST"])
