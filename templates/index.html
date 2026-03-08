@@ -88,6 +88,16 @@ button:disabled{opacity:.4;cursor:not-allowed}
   font-size:11px;font-weight:700;color:#fff;
   text-shadow:0 1px 4px rgba(0,0,0,.8);
 }
+/* selection */
+.home-img-card .card-check{
+  position:absolute;top:6px;left:6px;
+  width:20px;height:20px;border-radius:50%;
+  background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.55);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:transparent;transition:all .15s;pointer-events:none;
+}
+.home-img-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.home-img-card.selected .card-check{background:var(--accent);border-color:var(--accent);color:#fff}
 #btn-go-editor{
   width:100%;justify-content:center;padding:13px 20px;
   font-size:15px;margin-top:4px;border-radius:10px;
@@ -232,7 +242,10 @@ header h1 span{color:var(--accent)}
     <div id="home-images-section" style="display:none;width:100%">
       <div class="home-images-header">
         <span id="home-images-count">Pages ready</span>
-        <button class="btn-secondary btn-sm" id="btn-clear-all">✕ Remove all</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn-secondary btn-sm" id="btn-select-all">Select all</button>
+          <button class="btn-secondary btn-sm" id="btn-clear-all">✕ Remove all</button>
+        </div>
       </div>
       <div id="home-images-grid"></div>
       <button class="btn-primary" id="btn-go-editor">📷 Scan pages →</button>
@@ -395,32 +408,69 @@ async function init() {
   showHome()
 }
 
+// ── Home image selection ─────────────────────────────────────────────────────
+let selectedImageNames = new Set()
+let _allHomeImages = []
+
+function updateSelectionUI() {
+  const total = _allHomeImages.length
+  const n     = selectedImageNames.size
+  const cnt   = document.getElementById('home-images-count')
+  const btn   = document.getElementById('btn-go-editor')
+  const selBtn = document.getElementById('btn-select-all')
+  if (n === 0) {
+    cnt.textContent = `${total} image${total !== 1 ? 's' : ''} in input`
+    btn.textContent = `📷 Scan all ${total} →`
+    selBtn.textContent = 'Select all'
+  } else {
+    cnt.textContent = `${n} of ${total} selected`
+    btn.textContent = `📷 Scan selected (${n}) →`
+    selBtn.textContent = n === total ? 'Deselect all' : 'Select all'
+  }
+  document.getElementById('home-images-grid').querySelectorAll('.home-img-card').forEach(card => {
+    card.classList.toggle('selected', selectedImageNames.has(card.dataset.name))
+  })
+}
+
 async function loadInputImages() {
   const sec  = document.getElementById('home-images-section')
   const grid = document.getElementById('home-images-grid')
-  const cnt  = document.getElementById('home-images-count')
   try {
     const res  = await fetch('/api/images')
     const data = await res.json()
     const imgs = (data.images || []).filter(i => !i.error)
+    _allHomeImages = imgs
+    // keep only still-existing names in selection
+    for (const n of selectedImageNames) { if (!imgs.find(i => i.name === n)) selectedImageNames.delete(n) }
     if (imgs.length === 0) { sec.style.display = 'none'; return }
-    cnt.textContent = `${imgs.length} page${imgs.length > 1 ? 's' : ''} ready to scan`
+    const ts = Date.now()
     grid.innerHTML = imgs.map((img, i) => `
-      <div class="home-img-card" onclick="enterEditor()">
-        <img src="/api/thumb/${encodeURIComponent(img.name)}?t=${Date.now()}" loading="lazy" alt="${escH(img.name)}"/>
+      <div class="home-img-card" data-name="${escH(img.name)}">
+        <img src="/api/thumb/${encodeURIComponent(img.name)}?t=${ts}" loading="lazy" alt="${escH(img.name)}"/>
+        <div class="card-check">✓</div>
         <button class="card-del" data-name="${escH(img.name)}" title="Remove">✕</button>
         <span class="card-num">${i + 1}</span>
       </div>`).join('')
+    grid.querySelectorAll('.home-img-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const name = card.dataset.name
+        if (selectedImageNames.has(name)) selectedImageNames.delete(name)
+        else selectedImageNames.add(name)
+        updateSelectionUI()
+      })
+    })
     grid.querySelectorAll('.card-del').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation()
         const name = btn.dataset.name
         savedCorners.delete(name)
+        selectedImageNames.delete(name)
         await fetch(`/api/image/${encodeURIComponent(name)}`, { method: 'DELETE' })
         await loadInputImages()
       })
     })
     sec.style.display = 'block'
+    updateSelectionUI()
   } catch(e) { sec.style.display = 'none' }
 }
 
@@ -428,6 +478,7 @@ document.getElementById('btn-clear-all').onclick = async () => {
   if (!confirm('Remove all images from the input folder?')) return
   showLoading('Removing…')
   savedCorners.clear()
+  selectedImageNames.clear()
   const res  = await fetch('/api/images')
   const data = await res.json()
   const imgs = (data.images || []).filter(i => !i.error)
@@ -484,16 +535,34 @@ async function homeUpload(fileList) {
   await enterEditor()
 }
 
-document.getElementById('btn-go-editor').onclick = () => enterEditor()
+document.getElementById('btn-select-all').onclick = () => {
+  if (selectedImageNames.size === _allHomeImages.length) {
+    selectedImageNames.clear()
+  } else {
+    _allHomeImages.forEach(i => selectedImageNames.add(i.name))
+  }
+  updateSelectionUI()
+}
 
-async function enterEditor() {
+document.getElementById('btn-go-editor').onclick = () => {
+  const names = selectedImageNames.size > 0 ? [...selectedImageNames] : null
+  enterEditor(names)
+}
+
+async function enterEditor(filterNames = null) {
   showLoading('Detecting corners…')
   try {
     const res  = await fetch('/api/images')
     const data = await res.json()
-    images      = (data.images || []).filter(i => !i.error)
-    origCorners = images.map(i => i.corners.map(c => [...c]))  // auto-detected — used by Reset
-    applyPersistedCorners(images)                               // overlay any manual adjustments
+    let all = (data.images || []).filter(i => !i.error)
+    if (filterNames) {
+      const order = new Map(filterNames.map((n, i) => [n, i]))
+      all = all.filter(i => order.has(i.name))
+      all.sort((a, b) => order.get(a.name) - order.get(b.name))
+    }
+    images      = all
+    origCorners = images.map(i => i.corners.map(c => [...c]))
+    applyPersistedCorners(images)
     buildSidebar()
     showEditor()
     // Wait one animation frame so the editor is in the DOM and has real dimensions
