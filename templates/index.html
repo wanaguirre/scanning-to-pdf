@@ -532,7 +532,8 @@ async function homeUpload(fileList) {
   await fetch('/api/upload', { method: 'POST', body: fd })
   homeInput.value = ''
   hideLoading()
-  await enterEditor()
+  await loadInputImages()
+  await loadRecentPdfs()
 }
 
 document.getElementById('btn-select-all').onclick = () => {
