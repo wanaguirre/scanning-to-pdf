@@ -293,10 +293,11 @@ header h1 span{color:var(--accent)}
             <option value="a3">A3</option>
             <option value="free">Free (no resize)</option>
           </select>
-          <select id="scan-mode" title="Colour mode">
+          <select id="scan-mode" title="Color mode">
             <option value="bw">B&amp;W</option>
             <option value="gray">Grayscale</option>
-            <option value="color">Colour</option>
+            <option value="color">Color</option>
+            <option value="direct">Direct (screenshot)</option>
           </select>
         </div>
       </div>
@@ -794,7 +795,14 @@ function showToast(msg) {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 document.getElementById('paper-format').addEventListener('change', syncOutputName)
-document.getElementById('scan-mode').addEventListener('change', syncOutputName)
+document.getElementById('scan-mode').addEventListener('change', () => {
+  const direct = document.getElementById('scan-mode').value === 'direct'
+  document.getElementById('paper-format').disabled = direct
+  document.getElementById('btn-reset').disabled   = direct
+  document.getElementById('btn-preview').disabled = direct
+  document.getElementById('paper-format').style.opacity = direct ? '0.4' : ''
+  syncOutputName()
+})
 syncOutputName()
 init()
 </script>

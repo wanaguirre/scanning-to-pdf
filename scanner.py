@@ -206,8 +206,13 @@ def process_page(
     mode:  'bw'    – black & white adaptive threshold (best for text)
            'gray'  – natural grayscale, no thresholding
            'color' – full colour with sharpening + contrast boost
+           'direct'– no warp, no resize – image passed through as-is (screenshots)
     """
-    bgr, gray, _ = load_image(path)
+    bgr, gray, pil = load_image(path)
+
+    if mode == "direct":
+        return pil   # already EXIF-rotated RGB PIL image, native resolution
+
     corners_arr  = np.array(corners, dtype=np.float32)
 
     if mode == "color":
