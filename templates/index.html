@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Scanner → PDF</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#181b27;--surface2:#1e2235;
+  --border:#272b40;--accent:#4a9eff;--text:#e2e4f0;
+  --muted:#6b7494;--success:#34d399;--danger:#f87171;
+  --sidebar:230px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:14px;overflow:hidden}
+
+/* ── Common ── */
+button{border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;padding:8px 16px;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+button:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover:not(:disabled){background:#3a8ee0}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover:not(:disabled){background:#252840}
+.btn-success{background:#059669;color:#fff}
+.btn-success:hover:not(:disabled){background:#047857}
+.btn-danger{background:#dc2626;color:#fff}
+.btn-danger:hover:not(:disabled){background:#b91c1c}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-icon{padding:7px 10px}
+
+/* ── Views ── */
+#view-home,#view-editor{height:100vh;overflow:hidden;display:none}
+#view-home.active,#view-editor.active{display:flex}
+
+/* ══════════════════════════════════════
+   HOME VIEW
+══════════════════════════════════════ */
+#view-home{flex-direction:column;align-items:center;justify-content:center;padding:0}
+
+.home-wrap{display:flex;flex-direction:column;align-items:center;gap:32px;width:100%;max-width:680px;padding:40px 24px}
+
+.home-logo{text-align:center}
+.home-logo h1{font-size:32px;font-weight:800;letter-spacing:-1px}
+.home-logo h1 span{color:var(--accent)}
+.home-logo p{color:var(--muted);margin-top:8px;font-size:15px}
+
+/* Drop zone */
+#drop-zone{
+  width:100%;border:2px dashed var(--border);border-radius:16px;
+  padding:48px 32px;text-align:center;cursor:pointer;
+  transition:all .2s;background:var(--surface);
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+}
+#drop-zone:hover,#drop-zone.drag-over{border-color:var(--accent);background:#111827}
+.drop-icon{font-size:44px;line-height:1}
+.drop-title{font-size:17px;font-weight:700}
+.drop-sub{font-size:13px;color:var(--muted)}
+.drop-sub span{color:var(--accent);font-weight:600;cursor:pointer}
+.drop-sub span:hover{text-decoration:underline}
+#home-file-input{display:none}
+
+/* Input images grid */
+#home-images-section{width:100%}
+.home-images-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.home-images-header span{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+#home-images-grid{
+  display:grid;gap:10px;
+  grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+}
+.home-img-card{
+  position:relative;border-radius:10px;overflow:hidden;
+  aspect-ratio:3/4;background:var(--surface2);border:1.5px solid var(--border);
+  cursor:pointer;transition:border-color .15s;
+}
+.home-img-card:hover{border-color:var(--accent)}
+.home-img-card img{width:100%;height:100%;object-fit:cover;display:block}
+.home-img-card .card-del{
+  position:absolute;top:5px;right:5px;
+  background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:6px;
+  width:24px;height:24px;cursor:pointer;font-size:13px;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .15s;
+}
+.home-img-card:hover .card-del{opacity:1}
+.home-img-card .card-del:hover{background:var(--danger)}
+.home-img-card .card-num{
+  position:absolute;bottom:5px;left:7px;
+  font-size:11px;font-weight:700;color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,.8);
+}
+#btn-go-editor{
+  width:100%;justify-content:center;padding:13px 20px;
+  font-size:15px;margin-top:4px;border-radius:10px;
+}
+
+/* Recent PDFs */
+#recent-section{width:100%}
+#recent-section h2{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+#recent-list{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto}
+.recent-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;cursor:pointer;transition:all .15s;
+}
+.recent-item:hover{border-color:var(--accent);background:var(--surface2)}
+.recent-icon{font-size:22px;flex-shrink:0}
+.recent-info{flex:1;min-width:0}
+.recent-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.recent-dl{font-size:18px;color:var(--muted);padding:4px 6px;border-radius:6px;transition:color .15s}
+.recent-dl:hover{color:var(--accent)}
+
+/* ══════════════════════════════════════
+   EDITOR VIEW
+══════════════════════════════════════ */
+#view-editor{flex-direction:column}
+
+/* Header */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;height:50px;min-height:50px;
+  background:var(--surface);border-bottom:1px solid var(--border);gap:12px;flex-shrink:0;
+}
+header h1{font-size:15px;font-weight:700;cursor:pointer}
+header h1:hover{color:var(--accent)}
+header h1 span{color:var(--accent)}
+.header-right{display:flex;gap:8px;align-items:center}
+#legend{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted)}
+.litem{display:flex;align-items:center;gap:3px}
+.ldot{width:9px;height:9px;border-radius:50%}
+#status{font-size:12px;padding:4px 10px;border-radius:20px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);white-space:nowrap}
+#status.ok{color:var(--success);border-color:#065f46;background:#022c22}
+#status.warn{color:#fbbf24;border-color:#78350f}
+#status.error{color:var(--danger);border-color:#7f1d1d}
+
+/* Main layout */
+#editor-main{display:flex;flex:1;overflow:hidden}
+
+/* Sidebar */
+#sidebar{
+  width:var(--sidebar);min-width:var(--sidebar);
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+}
+#sidebar-header{padding:8px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-shrink:0}
+#sidebar-list{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:3px}
+#sidebar.drag-over{background:#1a2540;outline:2px dashed var(--accent);outline-offset:-4px}
+.thumb-item{
+  display:flex;align-items:center;gap:7px;
+  padding:7px 9px;border-radius:8px;cursor:pointer;
+  border:1.5px solid transparent;transition:all .12s;
+}
+.thumb-item:hover{background:#252840}
+.thumb-item:hover .del-btn{opacity:1}
+.thumb-item.active{border-color:var(--accent);background:#151e35}
+.thumb-num{font-size:11px;color:var(--muted);font-weight:600;min-width:16px}
+.thumb-name{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.del-btn{opacity:0;background:none;border:none;color:var(--danger);padding:0 2px;font-size:14px;cursor:pointer;border-radius:4px;flex-shrink:0;transition:opacity .12s}
+.del-btn:hover{background:rgba(248,113,113,.15)}
+#sidebar-drop-hint{padding:14px 10px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6}
+
+/* Canvas area */
+#editor-body{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#canvas-wrap{
+  flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  background:#0a0b10;padding:24px;
+}
+#canvas{cursor:crosshair;box-shadow:0 8px 48px rgba(0,0,0,.7);border-radius:3px;display:block;image-rendering:auto}
+
+/* Toolbar */
+#toolbar{
+  height:56px;min-height:56px;background:var(--surface);border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:10px;flex-shrink:0;
+}
+.tbar{display:flex;gap:7px;align-items:center}
+#page-info{font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* Loading overlay */
+#loading{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:200}
+#loading.show{display:flex}
+.spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{color:var(--text);font-size:14px}
+
+/* Preview modal */
+#preview-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:150}
+#preview-modal.show{display:flex}
+#preview-inner{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:20px;display:flex;flex-direction:column;gap:14px;max-width:92vw;max-height:92vh}
+#preview-inner h2{font-size:14px;color:var(--muted)}
+#preview-img{max-width:75vw;max-height:78vh;border-radius:6px;display:block;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+.modal-row{display:flex;justify-content:flex-end;gap:8px}
+
+/* Success toast */
+#toast{
+  position:fixed;bottom:24px;right:24px;transform:translateY(80px);
+  background:#059669;color:#fff;border-radius:10px;
+  padding:12px 20px;font-weight:600;font-size:14px;
+  box-shadow:0 4px 24px rgba(0,0,0,.4);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  z-index:300;display:flex;align-items:center;gap:8px;
+}
+#toast.show{transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HOME VIEW ═══════════ -->
+<div id="view-home">
+  <div class="home-wrap">
+    <div class="home-logo">
+      <h1>Scanner <span>→</span> PDF</h1>
+      <p>Drop your photos, adjust the crop, and get a clean PDF.</p>
+    </div>
+
+    <div id="drop-zone">
+      <div class="drop-icon">📄</div>
+      <div class="drop-title">Drop images here to get started</div>
+      <div class="drop-sub">or <span id="browse-link">browse files</span> &nbsp;·&nbsp; JPG, PNG, HEIC and more</div>
+    </div>
+    <input type="file" id="home-file-input" accept=".jpg,.jpeg,.png,.bmp,.tiff,.tif,.webp,.heic,.heif" multiple/>
+
+    <div id="home-images-section" style="display:none;width:100%">
+      <div class="home-images-header">
+        <span id="home-images-count">Pages ready</span>
+        <button class="btn-secondary btn-sm" id="btn-clear-all">✕ Remove all</button>
+      </div>
+      <div id="home-images-grid"></div>
+      <button class="btn-primary" id="btn-go-editor">📷 Scan pages →</button>
+    </div>
+
+    <div id="recent-section" style="display:none">
+      <h2>Recent PDFs</h2>
+      <div id="recent-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ EDITOR VIEW ═══════════ -->
+<div id="view-editor">
+  <header>
+    <h1 id="back-home" title="Back to home">Scanner <span>→</span> PDF</h1>
+    <div id="legend">
+      <div class="litem"><div class="ldot" style="background:#ff4d4d"></div>TL</div>
+      <div class="litem"><div class="ldot" style="background:#4dff88"></div>TR</div>
+      <div class="litem"><div class="ldot" style="background:#4d9fff"></div>BR</div>
+      <div class="litem"><div class="ldot" style="background:#ffd700"></div>BL</div>
+    </div>
+    <div class="header-right">
+      <span id="status"></span>
+      <button class="btn-success" id="btn-generate" disabled>⬇ Generate PDF</button>
+    </div>
+  </header>
+
+  <div id="editor-main">
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <button class="btn-secondary btn-sm" style="flex:1" onclick="triggerSidebarUpload()">+ Add pages</button>
+        <input type="file" id="sidebar-file-input" accept=".jpg,.jpeg,.png,.bmp,.tiff,.tif,.webp,.heic,.heif" multiple hidden/>
+      </div>
+      <div id="sidebar-list"></div>
+      <div id="sidebar-drop-hint">Drag images here to add more pages</div>
+    </div>
+
+    <div id="editor-body">
+      <div id="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div id="toolbar">
+        <div class="tbar">
+          <button class="btn-icon btn-secondary" id="btn-prev">◀</button>
+          <span id="page-info">– / –</span>
+          <button class="btn-icon btn-secondary" id="btn-next">▶</button>
+        </div>
+        <div class="tbar">
+          <button class="btn-secondary" id="btn-reset">↩ Reset corners</button>
+          <button class="btn-primary"   id="btn-preview">👁 Preview warp</button>
+        </div>
+        <div class="tbar">
+          <button class="btn-secondary btn-sm" id="btn-filename">📄 scan.pdf</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading"><div class="spinner"></div><p id="loading-msg">Processing…</p></div>
+
+<!-- Preview modal -->
+<div id="preview-modal">
+  <div id="preview-inner">
+    <h2>Warp preview</h2>
+    <img id="preview-img" src="" alt="preview"/>
+    <div class="modal-row"><button class="btn-secondary" onclick="closePreview()">Close</button></div>
+  </div>
+</div>
+
+<!-- Success toast -->
+<div id="toast"><span>✓</span><span id="toast-msg"></span></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let images      = []
+let origCorners = []
+let currentIdx  = 0
+let dragging    = -1
+let outputName  = 'scan.pdf'
+
+const CORNER_COLORS = ['#ff4d4d','#4dff88','#4d9fff','#ffd700']
+const CORNER_LABELS = ['TL','TR','BR','BL']
+const HANDLE_R      = 12
+
+// ── Elements ──────────────────────────────────────────────────────────────────
+const canvas     = document.getElementById('canvas')
+const ctx        = canvas.getContext('2d')
+const sideList   = document.getElementById('sidebar-list')
+const sidebar    = document.getElementById('sidebar')
+const pageInfo   = document.getElementById('page-info')
+const statusEl   = document.getElementById('status')
+const loadingEl  = document.getElementById('loading')
+const loadingMsg = document.getElementById('loading-msg')
+
+let imgEl = new Image()
+
+// ── Views ─────────────────────────────────────────────────────────────────────
+function showHome() {
+  document.getElementById('view-home').classList.add('active')
+  document.getElementById('view-editor').classList.remove('active')
+  loadRecentPdfs()
+  loadInputImages()
+}
+function showEditor() {
+  document.getElementById('view-editor').classList.add('active')
+  document.getElementById('view-home').classList.remove('active')
+}
+
+document.getElementById('back-home').onclick = () => showHome()
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  showHome()
+}
+
+async function loadInputImages() {
+  const sec  = document.getElementById('home-images-section')
+  const grid = document.getElementById('home-images-grid')
+  const cnt  = document.getElementById('home-images-count')
+  try {
+    const res  = await fetch('/api/images')
+    const data = await res.json()
+    const imgs = (data.images || []).filter(i => !i.error)
+    if (imgs.length === 0) { sec.style.display = 'none'; return }
+    cnt.textContent = `${imgs.length} page${imgs.length > 1 ? 's' : ''} ready to scan`
+    grid.innerHTML = imgs.map((img, i) => `
+      <div class="home-img-card" onclick="enterEditor()">
+        <img src="/api/thumb/${encodeURIComponent(img.name)}?t=${Date.now()}" loading="lazy" alt="${escH(img.name)}"/>
+        <button class="card-del" data-name="${escH(img.name)}" title="Remove">✕</button>
+        <span class="card-num">${i + 1}</span>
+      </div>`).join('')
+    grid.querySelectorAll('.card-del').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation()
+        const name = btn.dataset.name
+        await fetch(`/api/image/${encodeURIComponent(name)}`, { method: 'DELETE' })
+        await loadInputImages()
+      })
+    })
+    sec.style.display = 'block'
+  } catch(e) { sec.style.display = 'none' }
+}
+
+document.getElementById('btn-clear-all').onclick = async () => {
+  if (!confirm('Remove all images from the input folder?')) return
+  showLoading('Removing…')
+  const res  = await fetch('/api/images')
+  const data = await res.json()
+  const imgs = (data.images || []).filter(i => !i.error)
+  await Promise.all(imgs.map(i => fetch(`/api/image/${encodeURIComponent(i.name)}`, { method: 'DELETE' })))
+  hideLoading()
+  await loadInputImages()
+}
+
+async function loadRecentPdfs() {
+  try {
+    const res  = await fetch('/api/outputs')
+    const data = await res.json()
+    const sec  = document.getElementById('recent-section')
+    const list = document.getElementById('recent-list')
+    if (!data.files || data.files.length === 0) { sec.style.display = 'none'; return }
+    sec.style.display = 'block'
+    list.innerHTML = data.files.slice(0, 8).map(f => {
+      const kb   = (f.size / 1024).toFixed(0)
+      const date = new Date(f.mtime * 1000).toLocaleDateString()
+      return `<div class="recent-item" onclick="window.location='/output/${encodeURIComponent(f.name)}'">
+        <div class="recent-icon">📑</div>
+        <div class="recent-info">
+          <div class="recent-name">${escH(f.name)}</div>
+          <div class="recent-meta">${kb} KB &nbsp;·&nbsp; ${date}</div>
+        </div>
+        <div class="recent-dl" title="Download">⬇</div>
+      </div>`
+    }).join('')
+  } catch(e) {}
+}
+
+function escH(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+// ── Home upload ───────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById('drop-zone')
+const homeInput = document.getElementById('home-file-input')
+
+document.getElementById('browse-link').onclick = e => { e.stopPropagation(); homeInput.click() }
+dropZone.onclick  = () => homeInput.click()
+homeInput.onchange = () => homeUpload(homeInput.files)
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over') })
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); homeUpload(e.dataTransfer.files) })
+
+async function homeUpload(fileList) {
+  if (!fileList || !fileList.length) return
+  showLoading(`Uploading ${fileList.length} file(s)…`)
+  const fd = new FormData()
+  Array.from(fileList).forEach(f => fd.append('files', f))
+  await fetch('/api/upload', { method: 'POST', body: fd })
+  homeInput.value = ''
+  hideLoading()
+  await enterEditor()
+}
+
+document.getElementById('btn-go-editor').onclick = () => enterEditor()
+
+async function enterEditor() {
+  showLoading('Detecting corners…')
+  try {
+    const res  = await fetch('/api/images')
+    const data = await res.json()
+    images      = (data.images || []).filter(i => !i.error)
+    origCorners = images.map(i => i.corners.map(c => [...c]))
+    if (images.length === 0) { hideLoading(); setStatus('No images found', 'warn'); return }
+    buildSidebar()
+    await loadCanvasImage(0)
+    setStatus(`${images.length} page${images.length > 1 ? 's' : ''}`, 'ok')
+    document.getElementById('btn-generate').disabled = false
+    showEditor()
+  } catch(e) { setStatus('Error loading images', 'error') }
+  hideLoading()
+}
+
+// ── Sidebar upload / delete ───────────────────────────────────────────────────
+function triggerSidebarUpload() { document.getElementById('sidebar-file-input').click() }
+document.getElementById('sidebar-file-input').onchange = e => sidebarUpload(e.target.files)
+
+sidebar.addEventListener('dragover',  e => { e.preventDefault(); sidebar.classList.add('drag-over') })
+sidebar.addEventListener('dragleave', () => sidebar.classList.remove('drag-over'))
+sidebar.addEventListener('drop', e => {
+  e.preventDefault(); sidebar.classList.remove('drag-over')
+  sidebarUpload(e.dataTransfer.files)
+})
+
+async function sidebarUpload(fileList) {
+  if (!fileList || !fileList.length) return
+  showLoading(`Uploading ${fileList.length} file(s)…`)
+  const fd = new FormData()
+  Array.from(fileList).forEach(f => fd.append('files', f))
+  await fetch('/api/upload', { method: 'POST', body: fd })
+  document.getElementById('sidebar-file-input').value = ''
+  await refreshImages(images.length)
+  hideLoading()
+}
+
+async function deleteImage(e, name) {
+  e.stopPropagation()
+  if (!confirm(`Remove "${name}"?`)) return
+  showLoading('Removing…')
+  await fetch(`/api/image/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  await refreshImages(Math.max(0, currentIdx - 1))
+  hideLoading()
+}
+
+async function refreshImages(selectIdx) {
+  selectIdx = selectIdx || 0
+  const res   = await fetch('/api/images')
+  const data  = await res.json()
+  images      = (data.images || []).filter(i => !i.error)
+  origCorners = images.map(i => i.corners.map(c => [...c]))
+  buildSidebar()
+  if (images.length === 0) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    document.getElementById('btn-generate').disabled = true
+    setStatus('No images', 'warn')
+    return
+  }
+  document.getElementById('btn-generate').disabled = false
+  const idx = Math.min(selectIdx, images.length - 1)
+  await loadCanvasImage(idx)
+  setStatus(`${images.length} page${images.length > 1 ? 's' : ''}`, 'ok')
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function buildSidebar() {
+  sideList.innerHTML = ''
+  images.forEach((img, i) => {
+    const el = document.createElement('div')
+    el.className = 'thumb-item' + (i === currentIdx ? ' active' : '')
+    el.innerHTML = `
+      <span class="thumb-num">${i + 1}</span>
+      <span class="thumb-name" title="${escH(img.name)}">${escH(img.name)}</span>
+      <button class="del-btn" data-name="${escH(img.name)}">✕</button>`
+    el.querySelector('.del-btn').addEventListener('click', ev => deleteImage(ev, img.name))
+    el.addEventListener('click', ev => { if (!ev.target.classList.contains('del-btn')) loadCanvasImage(i) })
+    sideList.appendChild(el)
+  })
+  pageInfo.textContent = images.length ? `${currentIdx + 1} / ${images.length}` : '– / –'
+}
+
+function updateActiveThumb() {
+  document.querySelectorAll('.thumb-item').forEach((el, i) => el.classList.toggle('active', i === currentIdx))
+  pageInfo.textContent = `${currentIdx + 1} / ${images.length}`
+}
+
+// ── Canvas image loading ──────────────────────────────────────────────────────
+function loadCanvasImage(idx) {
+  return new Promise(resolve => {
+    currentIdx = idx
+    updateActiveThumb()
+    imgEl = new Image()
+    imgEl.onload  = () => { fitCanvas(); draw(); resolve() }
+    imgEl.onerror = resolve
+    imgEl.src = `/api/image/${encodeURIComponent(images[idx].name)}?t=${Date.now()}`
+  })
+}
+
+function fitCanvas() {
+  const dpr  = window.devicePixelRatio || 1
+  const wrap = document.getElementById('canvas-wrap')
+  const info = images[currentIdx]
+  const maxW = wrap.clientWidth  - 48
+  const maxH = wrap.clientHeight - 48
+  const scale  = Math.min(maxW / info.width, maxH / info.height, 1)
+  const cssW   = Math.round(info.width  * scale)
+  const cssH   = Math.round(info.height * scale)
+  canvas.width  = Math.round(cssW * dpr)
+  canvas.height = Math.round(cssH * dpr)
+  canvas.style.width  = cssW + 'px'
+  canvas.style.height = cssH + 'px'
+}
+
+const drawScale = () => images.length ? canvas.width / images[currentIdx].width : 1
+const toCanvas  = pt  => { const s = drawScale(); return [pt[0] * s, pt[1] * s] }
+const toOrig    = (cx, cy) => {
+  const s = drawScale(), info = images[currentIdx]
+  return [Math.max(0, Math.min(info.width, cx / s)), Math.max(0, Math.min(info.height, cy / s))]
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height)
+
+  const corners = images[currentIdx].corners
+  const cPts    = corners.map(c => toCanvas(c))
+
+  // Overlay quad
+  ctx.beginPath()
+  ctx.moveTo(cPts[0][0], cPts[0][1])
+  cPts.slice(1).forEach(([x, y]) => ctx.lineTo(x, y))
+  ctx.closePath()
+  ctx.fillStyle   = 'rgba(74,158,255,0.07)'; ctx.fill()
+  ctx.strokeStyle = 'rgba(74,158,255,0.65)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 3]); ctx.stroke(); ctx.setLineDash([])
+
+  // Corner handles
+  cPts.forEach(([x, y], i) => {
+    // Shadow
+    ctx.beginPath(); ctx.arc(x, y, HANDLE_R + 4, 0, 2 * Math.PI)
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fill()
+    // Fill
+    ctx.beginPath(); ctx.arc(x, y, HANDLE_R, 0, 2 * Math.PI)
+    ctx.fillStyle = CORNER_COLORS[i]; ctx.fill()
+    // Rim
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ctx.stroke()
+    // Label
+    ctx.fillStyle = '#fff'
+    ctx.font = `bold ${HANDLE_R - 1}px system-ui`
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(CORNER_LABELS[i], x, y)
+  })
+}
+
+// ── Drag interaction ──────────────────────────────────────────────────────────
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect()
+  const src  = e.touches ? e.touches[0] : e
+  return [
+    (src.clientX - rect.left)  * (canvas.width  / rect.width),
+    (src.clientY - rect.top)   * (canvas.height / rect.height)
+  ]
+}
+
+function nearestCorner(cx, cy) {
+  let best = -1, bestD = Infinity
+  images[currentIdx].corners.map(c => toCanvas(c)).forEach(([x, y], i) => {
+    const d = Math.hypot(x - cx, y - cy)
+    if (d < bestD) { bestD = d; best = i }
+  })
+  return bestD < HANDLE_R + 12 ? best : -1
+}
+
+canvas.onmousedown = e => {
+  const [cx, cy] = getCanvasPos(e)
+  dragging = nearestCorner(cx, cy)
+  if (dragging >= 0) canvas.style.cursor = 'grabbing'
+}
+canvas.onmousemove = e => {
+  const [cx, cy] = getCanvasPos(e)
+  if (dragging >= 0) { images[currentIdx].corners[dragging] = toOrig(cx, cy); draw(); return }
+  canvas.style.cursor = nearestCorner(cx, cy) >= 0 ? 'grab' : 'crosshair'
+}
+canvas.onmouseup = canvas.onmouseleave = () => { dragging = -1; canvas.style.cursor = 'crosshair' }
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault()
+  const [cx, cy] = getCanvasPos(e)
+  dragging = nearestCorner(cx, cy)
+}, { passive: false })
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault()
+  if (dragging < 0) return
+  const [cx, cy] = getCanvasPos(e)
+  images[currentIdx].corners[dragging] = toOrig(cx, cy)
+  draw()
+}, { passive: false })
+canvas.addEventListener('touchend', () => dragging = -1)
+
+// ── Toolbar ───────────────────────────────────────────────────────────────────
+document.getElementById('btn-prev').onclick    = () => { if (currentIdx > 0) loadCanvasImage(currentIdx - 1) }
+document.getElementById('btn-next').onclick    = () => { if (currentIdx < images.length - 1) loadCanvasImage(currentIdx + 1) }
+document.getElementById('btn-reset').onclick   = () => {
+  images[currentIdx].corners = origCorners[currentIdx].map(c => [...c])
+  draw()
+  setStatus('Corners reset', 'ok')
+}
+document.getElementById('btn-preview').onclick = async () => {
+  showLoading('Rendering preview…')
+  try {
+    const res  = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: images[currentIdx].name, corners: images[currentIdx].corners })
+    })
+    const data = await res.json()
+    document.getElementById('preview-img').src = `data:image/jpeg;base64,${data.preview}`
+    document.getElementById('preview-modal').classList.add('show')
+  } catch(e) { setStatus('Preview failed', 'error') }
+  hideLoading()
+}
+document.getElementById('btn-generate').onclick = async () => {
+  showLoading('Building PDF…')
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: outputName,
+        pages: images.map(i => ({ name: i.name, corners: i.corners }))
+      })
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      setStatus('Error: ' + err.error, 'error')
+      hideLoading()
+      return
+    }
+    const blob = await res.blob()
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = outputName; a.click()
+    URL.revokeObjectURL(url)
+    showToast(`${outputName} ready!`)
+    setStatus('PDF generated', 'ok')
+    setTimeout(() => showHome(), 1800)
+  } catch(e) { setStatus('Error: ' + e.message, 'error') }
+  hideLoading()
+}
+document.getElementById('btn-filename').onclick = () => {
+  const n = prompt('PDF filename:', outputName)
+  if (n && n.trim()) {
+    outputName = n.trim().endsWith('.pdf') ? n.trim() : n.trim() + '.pdf'
+    document.getElementById('btn-filename').textContent = '📄 ' + outputName
+  }
+}
+
+function closePreview() { document.getElementById('preview-modal').classList.remove('show') }
+document.getElementById('preview-modal').onclick = e => {
+  if (e.target === document.getElementById('preview-modal')) closePreview()
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('view-editor').classList.contains('active')) return
+  if (e.target.tagName === 'INPUT') return
+  if (e.key === 'ArrowLeft'  && currentIdx > 0)               loadCanvasImage(currentIdx - 1)
+  if (e.key === 'ArrowRight' && currentIdx < images.length-1) loadCanvasImage(currentIdx + 1)
+  if (e.key === 'p' || e.key === 'P') document.getElementById('btn-preview').click()
+  if (e.key === 'Escape') closePreview()
+})
+
+window.addEventListener('resize', () => { if (!images.length) return; fitCanvas(); draw() })
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setStatus(msg, type) { statusEl.textContent = msg; statusEl.className = type }
+function showLoading(msg)  { loadingMsg.textContent = msg; loadingEl.classList.add('show') }
+function hideLoading()     { loadingEl.classList.remove('show') }
+
+let toastTimer
+function showToast(msg) {
+  const toast = document.getElementById('toast')
+  document.getElementById('toast-msg').textContent = msg
+  toast.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3500)
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+init()
+</script>
+</body>
+</html>

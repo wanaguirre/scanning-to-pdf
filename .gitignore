@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Output (generated PDFs)
+output/*
+!output/.gitkeep
+
+# Input images (don't commit personal scans)
+input/*
+!input/.gitkeep
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
