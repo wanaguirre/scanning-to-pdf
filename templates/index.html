@@ -167,6 +167,16 @@ header h1 span{color:var(--accent)}
 }
 #canvas{cursor:crosshair;box-shadow:0 8px 48px rgba(0,0,0,.7);border-radius:3px;display:block;image-rendering:auto}
 
+/* Paper format select */
+#paper-format{
+  background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7494'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;padding-right:24px;
+}
+#paper-format:hover{border-color:var(--accent)}
+
 /* Toolbar */
 #toolbar{
   height:56px;min-height:56px;background:var(--surface);border-top:1px solid var(--border);
@@ -277,6 +287,12 @@ header h1 span{color:var(--accent)}
         </div>
         <div class="tbar">
           <button class="btn-secondary btn-sm" id="btn-filename">📄 scan.pdf</button>
+          <select id="paper-format" title="Output paper size">
+            <option value="a4">A4</option>
+            <option value="letter">US Letter</option>
+            <option value="a3">A3</option>
+            <option value="free">Free (no resize)</option>
+          </select>
         </div>
       </div>
     </div>
@@ -651,7 +667,11 @@ document.getElementById('btn-preview').onclick = async () => {
     const res  = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: images[currentIdx].name, corners: images[currentIdx].corners })
+      body: JSON.stringify({
+        name: images[currentIdx].name,
+        corners: images[currentIdx].corners,
+        paper: document.getElementById('paper-format').value
+      })
     })
     const data = await res.json()
     document.getElementById('preview-img').src = `data:image/jpeg;base64,${data.preview}`
@@ -667,6 +687,7 @@ document.getElementById('btn-generate').onclick = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: outputName,
+        paper: document.getElementById('paper-format').value,
         pages: images.map(i => ({ name: i.name, corners: i.corners }))
       })
     })

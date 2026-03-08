@@ -13,7 +13,14 @@ from pathlib import Path
 pillow_heif.register_heif_opener()
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".heic", ".heif"}
-A4_MM = (210, 297)
+
+# Paper sizes in mm (width × height, portrait).  'free' = keep warp dimensions.
+PAPER_SIZES: dict[str, tuple[float, float] | None] = {
+    "a4":     (210.0, 297.0),
+    "letter": (215.9, 279.4),
+    "a3":     (297.0, 420.0),
+    "free":   None,
+}
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -135,11 +142,18 @@ def perspective_warp(img: np.ndarray, corners: np.ndarray) -> np.ndarray:
     return cv2.warpPerspective(img, M, (W, H))
 
 
-def resize_to_a4(img: np.ndarray, dpi: int) -> np.ndarray:
-    px_w = int(A4_MM[0] / 25.4 * dpi)
-    px_h = int(A4_MM[1] / 25.4 * dpi)
+def resize_to_paper(img: np.ndarray, dpi: int, paper: str = "a4") -> np.ndarray:
+    """Fit *img* (grayscale) onto the chosen paper canvas at *dpi*.
+    paper can be 'a4', 'letter', 'a3', or 'free' (keep warp dimensions).
+    """
+    mm = PAPER_SIZES.get(paper.lower())
+    if mm is None:          # 'free' – return the image unchanged
+        return img
     h, w = img.shape[:2]
-    if w > h:
+    # Auto-rotate canvas to match image orientation
+    px_w = int(mm[0] / 25.4 * dpi)
+    px_h = int(mm[1] / 25.4 * dpi)
+    if w > h:               # landscape image → landscape canvas
         px_w, px_h = px_h, px_w
     scale = min(px_w / w, px_h / h)
     new_w, new_h = int(w * scale), int(h * scale)
@@ -162,17 +176,23 @@ def enhance_scan(gray: np.ndarray) -> np.ndarray:
     return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
 
-def process_page(path: Path, corners: list[list[float]], dpi: int = 300) -> Image.Image:
+def process_page(
+    path: Path,
+    corners: list[list[float]],
+    dpi: int = 300,
+    paper: str = "a4",
+) -> Image.Image:
     """
     Given an image path and 4 corners (in original pixel coords, TL/TR/BR/BL),
     return a processed PIL Image ready for PDF assembly.
+    paper: 'a4' | 'letter' | 'a3' | 'free'
     """
     bgr, gray, _ = load_image(path)
     corners_arr  = np.array(corners, dtype=np.float32)
 
     bgr  = perspective_warp(bgr,  corners_arr)
     gray = perspective_warp(gray, corners_arr)
-    gray = resize_to_a4(gray, dpi)
+    gray = resize_to_paper(gray, dpi, paper)
     gray = enhance_scan(gray)
     return Image.fromarray(gray)
 
