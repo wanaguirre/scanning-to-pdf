@@ -286,7 +286,7 @@ header h1 span{color:var(--accent)}
           <button class="btn-primary"   id="btn-preview">👁 Preview warp</button>
         </div>
         <div class="tbar">
-          <button class="btn-secondary btn-sm" id="btn-filename">📄 scan.pdf</button>
+          <button class="btn-secondary btn-sm" id="btn-filename">📄 …</button>
           <select id="paper-format" title="Output paper size">
             <option value="a4">A4</option>
             <option value="letter">US Letter</option>
@@ -320,7 +320,9 @@ let images      = []
 let origCorners = []
 let currentIdx  = 0
 let dragging    = -1
-let outputName  = 'scan.pdf'
+const _today = new Date()
+const _ds    = `${_today.getFullYear()}-${String(_today.getMonth()+1).padStart(2,'0')}-${String(_today.getDate()).padStart(2,'0')}_${String(_today.getHours()).padStart(2,'0')}-${String(_today.getMinutes()).padStart(2,'0')}`
+let outputName  = `scan_${_ds}.pdf`
 
 // Persists manually adjusted corners keyed by filename.
 // Survives page navigation and refreshes; cleared only on image delete or Reset.
@@ -770,6 +772,7 @@ function showToast(msg) {
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-filename').textContent = '📄 ' + outputName
 init()
 </script>
 </body>
