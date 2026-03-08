@@ -439,10 +439,13 @@ async function enterEditor() {
     origCorners = images.map(i => i.corners.map(c => [...c]))
     if (images.length === 0) { hideLoading(); setStatus('No images found', 'warn'); return }
     buildSidebar()
+    showEditor()
+    // Wait one animation frame so the editor is in the DOM and has real dimensions
+    // before fitCanvas() measures canvas-wrap's clientWidth/Height
+    await new Promise(r => requestAnimationFrame(r))
     await loadCanvasImage(0)
     setStatus(`${images.length} page${images.length > 1 ? 's' : ''}`, 'ok')
     document.getElementById('btn-generate').disabled = false
-    showEditor()
   } catch(e) { setStatus('Error loading images', 'error') }
   hideLoading()
 }
