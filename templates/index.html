@@ -348,6 +348,7 @@ function buildOutputName() {
   if (_nameEditedManually) return outputName
   const paper = document.getElementById('paper-format')?.value || 'a4'
   const mode  = document.getElementById('scan-mode')?.value  || 'bw'
+  if (mode === 'direct') return `scan_${_ds}_direct.pdf`
   return `scan_${_ds}_${paper}_${mode}.pdf`
 }
 function syncOutputName() {
